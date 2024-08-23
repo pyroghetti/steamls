@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+#
+# steamls 1.0 (2024-08-23)
+# steamls is a Bash script that lists installed Steam games and their AppIDs.
+#
+# MIT License
+#
+# Copyright (c) 2024 Xezal O.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+# and associated documentation files (the “Software”), to deal in the Software without
+# restriction, including without limitation the rights to use, copy, modify, merge, publis
+# distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all copies or
+# substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+# BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+IFS=$'\n'
+LC_ALL=C
+steamLib=~/.local/share/Steam/steamapps
+hideProton=1
+hideRedist=1
+hideSniper=1
+
+steamlshelp()
+{
+printf "Usage: steamls [-rps][-d DIR | -f]\n\n"
+printf " -h\tprint help and exit\n\n"
+printf "HIDDEN TOOLS\n\n"
+printf " -p\tunhide Proton\n"
+printf " -r\tunhide Steamworks Common Redistributables\n"
+printf " -s\tunhide Steam Linux Runtime\n\n"
+printf "DIRECTORY\n\n"
+printf " -d DIR provide an alternative Steam library path, omitting \"./steamapps\"\n"
+printf " -f\tsearches for Steam libraries in mounted devices and your home\n\tnote: only the first match will be taken to account\n\n"
+printf " Report bugs and suggest features at https://github.com/pyroghetti/steamls/issues\n or by emailing me at pyroghetti@protonmail.com\n"
+exit 0
+}
+
+while getopts ":hprsd:f" opts
+do
+case ${opts} in
+	h) steamlshelp
+ ;;
+	p) hideProton=0
+ ;;
+	r) hideRedist=0
+ ;;
+	s) hideSniper=0
+ ;;
+	d) steamLib="$OPTARG/steamapps"
+ ;;
+	f) steamLib=$(find 2>&1 /run/media/$USER /mnt ~ -type d -name steamapps -print -quit | grep -Ev "Permission denied|No such file or directory|compatdata/[0-9]*/pfx")
+
+	if [ -z "$steamLib" ];
+	then printf "Steam library not found :/\n" && exit 1;
+	else printf "Steam library found at $steamLib:\n\n";
+	fi
+ ;;
+	*) printf "Unrecognized flag or bad usage. Try steamls -h.\n" && exit 1
+esac
+done
+
+[ ! -d "$steamLib" ] && printf "$steamLib doesn't exist or can't be read by $USER.\n" && exit 1
+
+for ACF in "$steamLib"/appmanifest_*.acf
+do
+	[ ! -f "$ACF" ] && printf "No manifests in $steamLib?" && exit 1
+	printf "%s = %s\n" \
+	$(grep '"appid"' "$ACF" | cut -d \" -f 4) \
+	$(grep '"name"' "$ACF" | cut -d \" -f 4)
+done |
+
+{
+	if [ "$hideProton" = "1" ];
+	then grep -Ev "^(858280|961940|1054830|1113280|1245040|1420170|1493710|1580130|1887720|2180100|2230260|2348590|2805730|1161040|1826330) =";
+	else cat -;
+	fi
+} |
+
+{
+	if [ "$hideRedist" = "1" ];
+	then grep -Ev "^228980 =";
+	else cat -;
+	fi
+} |
+
+{
+	if
+	[ "$hideSniper" = "1" ];
+	then grep -Ev "^(1070560|1391110|1628350) =" -;
+	else cat -;
+	fi
+} |
+
+sort -g
